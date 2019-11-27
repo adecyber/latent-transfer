@@ -10,7 +10,7 @@ matplotlib.use('pdf')
 import matplotlib.pyplot as plt
 import gym
 import tensorflow as tf 
-import gym_backcheetah
+#import gym_backcheetah
 
 from absl import flags
 from absl import app

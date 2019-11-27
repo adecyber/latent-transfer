@@ -15,7 +15,7 @@ from tf_agents.trajectories import trajectory
 from tf_agents.utils import common
 from tf_agents.utils import eager_utils
 from tf_agents.utils import nest_utils
-
+import latent_inference_network
 
 SacLossInfo = collections.namedtuple(
     'SacLossInfo', ('critic_loss', 'actor_loss', 'alpha_loss'))
@@ -184,7 +184,12 @@ class SacAgent(tf_agent.TFAgent):
     self._summarize_grads_and_vars = summarize_grads_and_vars
     self._update_target = self._get_target_updater(
         tau=self._target_update_tau, period=self._target_update_period)
-
+    self._action_generator = policy.action_generator
+    
+    z_inference_network_ctor = latent_inference_network.ZInferenceNetwork
+    self._z_inference_network = z_inference_network_ctor(input_tensor_spec=time_step_spec)
+    self._z_inference_network.create_variables() 
+  
     train_sequence_length = 2 if not critic_network.state_spec else None
 
     super(SacAgent, self).__init__(
@@ -278,7 +283,13 @@ class SacAgent(tf_agent.TFAgent):
     tf.debugging.check_numerics(alpha_loss, 'Alpha loss is inf or nan.')
     alpha_grads = tape.gradient(alpha_loss, alpha_variable)
     self._apply_gradients(alpha_grads, alpha_variable, self._alpha_optimizer)
-
+    """
+    with tf.GradientTape() as tape:
+      vae_loss = self.vae_loss(time_steps)
+    tf.debugging.check_numerics(vae_loss, 'VAE loss is inf or nan.')
+    vae_grads = tape.gradient(vae_loss)
+    self._apply_gradients(vae_grads, self._vae_optimizer) 
+   """
     with tf.name_scope('Losses'):
       tf.compat.v2.summary.scalar(
           name='critic_loss', data=critic_loss, step=self.train_step_counter)
@@ -536,3 +547,47 @@ class SacAgent(tf_agent.TFAgent):
             step=self.train_step_counter)
 
       return alpha_loss
+  
+  def vae_loss(self, time_steps):
+    with tf.name_scope('loss_vae'):
+        
+      # Inference.
+      init_states = nest.map_structure(lambda x: x[:, 0], states)
+
+      effects = self._effect_encoder(init_states)
+      z_means, z_stddevs = self._z_inference_network(
+       	(init_states, actions, effects))
+      zs = self._sample_gaussian_noise(z_means, z_stddevs)
+
+      # Predict
+      pred_actions = self._action_generator(
+	(init_states, effects, zs))
+
+      # Losses
+      z_kld = self._normal_kld(
+	zs,
+	z_means,
+	z_stddevs,
+	c_weights) * self._kld_loss_weight
+
+      action_loss = 0.0
+      for t in range(self._num_goal_steps):
+        action_loss += self._action_loss(
+	    actions[:, t],
+	    pred_actions[:, t],
+	    c_weights) * self._action_loss_weight
+      action_loss /= self._num_goal_steps
+
+      # Summaries.
+      tf.compat.v2.summary.scalar(
+	name='z_kld', data=z_kld,
+	step=self.train_step_counter)
+      tf.compat.v2.summary.scalar(
+	name='action_loss', data=action_loss,
+	step=self.train_step_counter)
+
+    return z_kld + action_loss
+
+    def _sample_gaussian_noise(self, means, stddevs):
+      return means + stddevs * tf.random_normal(
+            tf.shape(stddevs), 0., 1., dtype=tf.float32)

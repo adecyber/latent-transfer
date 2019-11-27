@@ -152,11 +152,10 @@ class ActorDistributionNetwork(network.DistributionNetwork):
         training=training)
     outer_rank = nest_utils.get_outer_rank(observations, self.input_tensor_spec)
     zs = state
-    #zs = tf.nest.map_structure(
-       # lambda proj_net: proj_net(state, outer_rank), self._projection_networks)
+    output_actions = tf.nest.map_structure(
+        lambda proj_net: proj_net(state, outer_rank), self._projection_networks)
    
-    #observations = tf.squeeze(tf.reshape(observations, [17,outer_rank]), axis=1)
     #import pdb
     #pdb.set_trace()
-    output_actions = self._action_generator(observations, zs)
+    #output_actions = self._action_generator(observations, zs)
     return output_actions, network_state

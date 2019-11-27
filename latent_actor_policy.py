@@ -10,6 +10,7 @@ from __future__ import print_function
 import gin
 import tensorflow as tf
 import tensorflow_probability as tfp
+import latent_action_generator
 
 from tf_agents.networks import network
 from tf_agents.policies import tf_policy
@@ -55,6 +56,9 @@ class ActorPolicy(tf_policy.Base):
     self._actor_network = actor_network
     self._observation_normalizer = observation_normalizer
     self._training = training
+    action_generator_ctor = latent_action_generator.ActionGenerator
+    self.action_generator = action_generator_ctor(time_steps_spec)
+    self.action_generator.create_variables()
 
     super(ActorPolicy, self).__init__(
         time_step_spec=time_step_spec,
