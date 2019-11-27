@@ -283,13 +283,15 @@ class SacAgent(tf_agent.TFAgent):
     tf.debugging.check_numerics(alpha_loss, 'Alpha loss is inf or nan.')
     alpha_grads = tape.gradient(alpha_loss, alpha_variable)
     self._apply_gradients(alpha_grads, alpha_variable, self._alpha_optimizer)
-    """
+    
+    vae_variables = (self._z_inference_network.trainable_variables + self._action_generator.trainable_variables)
     with tf.GradientTape() as tape:
+      tape.watch(vae_variables)
       vae_loss = self.vae_loss(time_steps)
     tf.debugging.check_numerics(vae_loss, 'VAE loss is inf or nan.')
-    vae_grads = tape.gradient(vae_loss)
-    self._apply_gradients(vae_grads, self._vae_optimizer) 
-   """
+    vae_grads = tape.gradient(vae_loss, vae_variables)
+    self._apply_gradients(vae_grads, vae_variables, self._actor_optimizer) 
+   
     with tf.name_scope('Losses'):
       tf.compat.v2.summary.scalar(
           name='critic_loss', data=critic_loss, step=self.train_step_counter)
