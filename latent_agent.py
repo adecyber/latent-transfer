@@ -286,8 +286,10 @@ class SacAgent(tf_agent.TFAgent):
     
     vae_variables = (self._z_inference_network.trainable_variables + self._action_generator.trainable_variables)
     with tf.GradientTape() as tape:
+      assert vae_variables, ('No trainable vae variables to '
+                                         'optimize.')
       tape.watch(vae_variables)
-      vae_loss = self.vae_loss(time_steps)
+      vae_loss = self.vae_loss(time_steps, actions, next_time_steps)
     tf.debugging.check_numerics(vae_loss, 'VAE loss is inf or nan.')
     vae_grads = tape.gradient(vae_loss, vae_variables)
     self._apply_gradients(vae_grads, vae_variables, self._actor_optimizer) 
@@ -303,7 +305,7 @@ class SacAgent(tf_agent.TFAgent):
     self.train_step_counter.assign_add(1)
     self._update_target()
 
-    total_loss = critic_loss + actor_loss + alpha_loss
+    total_loss = critic_loss + actor_loss + alpha_loss + vae_loss
 
     extra = SacLossInfo(critic_loss=critic_loss,
                         actor_loss=actor_loss,
@@ -550,7 +552,7 @@ class SacAgent(tf_agent.TFAgent):
 
       return alpha_loss
   
-  def vae_loss(self, time_steps):
+  def vae_loss(self, time_steps, actions, next_time_steps):
     with tf.name_scope('loss_vae'):
         
       # Inference.
@@ -588,7 +590,8 @@ class SacAgent(tf_agent.TFAgent):
 	name='action_loss', data=action_loss,
 	step=self.train_step_counter)
 
-    return z_kld + action_loss
+    #return z_kld + action_loss
+    return 5
 
     def _sample_gaussian_noise(self, means, stddevs):
       return means + stddevs * tf.random_normal(
