@@ -17,6 +17,8 @@ from tf_agents.utils import eager_utils
 from tf_agents.utils import nest_utils
 import latent_inference_network
 
+EPS = 1e-20
+
 SacLossInfo = collections.namedtuple(
     'SacLossInfo', ('critic_loss', 'actor_loss', 'alpha_loss'))
 
@@ -108,7 +110,7 @@ class SacAgent(tf_agent.TFAgent):
         that name. Defaults to the class name.
     """
     tf.Module.__init__(self, name=name)
-
+    print("Initializing SAC Agent...")
     flat_action_spec = tf.nest.flatten(action_spec)
     for spec in flat_action_spec:
       if spec.dtype.is_integer:
@@ -138,17 +140,17 @@ class SacAgent(tf_agent.TFAgent):
         common.maybe_copy_target_network_with_checks(self._critic_network_2,
                                                      target_critic_network_2,
                                                      'TargetCriticNetwork2'))
-
+    print("Creating actor network variables")
     if actor_network:
       actor_network.create_variables()
     self._actor_network = actor_network
-
+    print("initializing policy in agent intialization")
     policy = actor_policy_ctor(
         time_step_spec=time_step_spec,
         action_spec=action_spec,
         actor_network=self._actor_network,
         training=False)
-
+    print("Initializing train policy in agent init")
     self._train_policy = actor_policy_ctor(
         time_step_spec=time_step_spec,
         action_spec=action_spec,
@@ -187,9 +189,8 @@ class SacAgent(tf_agent.TFAgent):
     self._action_generator = policy.action_generator
     
     z_inference_network_ctor = latent_inference_network.ZInferenceNetwork
-    self._z_inference_network = z_inference_network_ctor(input_tensor_spec=time_step_spec)
+    self._z_inference_network = z_inference_network_ctor(input_tensor_spec=(time_step_spec.observation, action_spec))
     self._z_inference_network.create_variables() 
-  
     train_sequence_length = 2 if not critic_network.state_spec else None
 
     super(SacAgent, self).__init__(
@@ -240,9 +241,9 @@ class SacAgent(tf_agent.TFAgent):
       ValueError: If optimizers are None and no default value was provided to
         the constructor.
     """
+    print("Running train forward pass")
     time_steps, actions, next_time_steps = self._experience_to_transitions(
         experience)
-
     trainable_critic_variables = (
         self._critic_network_1.trainable_variables +
         self._critic_network_2.trainable_variables)
@@ -269,6 +270,7 @@ class SacAgent(tf_agent.TFAgent):
       assert trainable_actor_variables, ('No trainable actor variables to '
                                          'optimize.')
       tape.watch(trainable_actor_variables)
+      print("Computing Actor loss")
       actor_loss = self.actor_loss(time_steps, weights=weights)
     tf.debugging.check_numerics(actor_loss, 'Actor loss is inf or nan.')
     actor_grads = tape.gradient(actor_loss, trainable_actor_variables)
@@ -289,6 +291,7 @@ class SacAgent(tf_agent.TFAgent):
       assert vae_variables, ('No trainable vae variables to '
                                          'optimize.')
       tape.watch(vae_variables)
+      print("Computing VAE Loss")
       vae_loss = self.vae_loss(time_steps, actions, next_time_steps)
     tf.debugging.check_numerics(vae_loss, 'VAE loss is inf or nan.')
     vae_grads = tape.gradient(vae_loss, vae_variables)
@@ -304,8 +307,7 @@ class SacAgent(tf_agent.TFAgent):
 
     self.train_step_counter.assign_add(1)
     self._update_target()
-
-    total_loss = critic_loss + actor_loss + alpha_loss + vae_loss
+    total_loss = critic_loss + actor_loss + alpha_loss + tf.dtypes.cast(vae_loss, 'float32')
 
     extra = SacLossInfo(critic_loss=critic_loss,
                         actor_loss=actor_loss,
@@ -553,34 +555,62 @@ class SacAgent(tf_agent.TFAgent):
       return alpha_loss
   
   def vae_loss(self, time_steps, actions, next_time_steps):
+    
+    def _sample_gaussian_noise(means, stddevs):
+      return means + stddevs * tf.random_normal(
+            tf.shape(stddevs), 0., 1., dtype=tf.float64)
+    
+    def log_normal(x, mean, stddev):
+      stddev = tf.abs(stddev)
+      stddev = tf.add(stddev, EPS) 
+      return -0.5 * tf.reduce_sum((tf.dtypes.cast(tf.log(2 * np.pi), 'float64') + tf.dtypes.cast(tf.log(tf.square(stddev)), 'float64')) + tf.dtypes.cast(tf.square(x-mean), 'float64') / tf.dtypes.cast(tf.square(stddev), 'float64'), axis=-1)
+      
+      '''
+      return -0.5 * tf.reduce_sum(
+        (tf.log(2 * np.pi) + tf.log(tf.square(stddev))
+         + tf.square(x - mean) / tf.square(stddev)),
+         axis=-1)
+      '''
+    def _normal_kld(z, z_mean, z_stddev, weights=1.0):
+      kld_array = (log_normal(z, z_mean, z_stddev) -
+                      log_normal(z, 0.0, 1.0))
+      return tf.losses.compute_weighted_loss(kld_array, weights)  
+    
+    def l2_loss(targets,
+            outputs,
+            weights=1.0,
+            reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS):
+      loss = 0.5 * tf.reduce_sum(tf.dtypes.cast(tf.square(tf.dtypes.cast(targets, 'float64') - tf.dtypes.cast(outputs, 'float64')), 'float64'), axis=-1)
+      return tf.losses.compute_weighted_loss(loss, weights, reduction=reduction)    
+    def action_loss(targets, outputs, weights=1.0):
+      assert len(targets.shape) == len(outputs.shape)
+      # Weight starting position by 10.
+      return 10.0 * l2_loss(
+        targets=targets[..., :2],
+        outputs=outputs[..., :2],
+        weights=weights) + l2_loss(
+            targets=targets[..., 2:],
+            outputs=outputs[..., 2:],
+            weights=weights)
+
     with tf.name_scope('loss_vae'):
         
-      # Inference.
-      init_states = nest.map_structure(lambda x: x[:, 0], states)
-
-      effects = self._effect_encoder(init_states)
       z_means, z_stddevs = self._z_inference_network(
-       	(init_states, actions, effects))
-      zs = self._sample_gaussian_noise(z_means, z_stddevs)
-
+       	(time_steps.observation, actions))
+      zs = _sample_gaussian_noise(z_means, z_stddevs)
       # Predict
       pred_actions = self._action_generator(
-	(init_states, effects, zs))
+	(time_steps.observation, zs))
 
       # Losses
-      z_kld = self._normal_kld(
+      z_kld = _normal_kld(
 	zs,
 	z_means,
-	z_stddevs,
-	c_weights) * self._kld_loss_weight
+	z_stddevs)
 
-      action_loss = 0.0
-      for t in range(self._num_goal_steps):
-        action_loss += self._action_loss(
-	    actions[:, t],
-	    pred_actions[:, t],
-	    c_weights) * self._action_loss_weight
-      action_loss /= self._num_goal_steps
+      action_loss = action_loss(
+	    actions,
+	    pred_actions) 
 
       # Summaries.
       tf.compat.v2.summary.scalar(
@@ -590,9 +620,4 @@ class SacAgent(tf_agent.TFAgent):
 	name='action_loss', data=action_loss,
 	step=self.train_step_counter)
 
-    #return z_kld + action_loss
-    return 5
-
-    def _sample_gaussian_noise(self, means, stddevs):
-      return means + stddevs * tf.random_normal(
-            tf.shape(stddevs), 0., 1., dtype=tf.float32)
+    return z_kld + action_loss

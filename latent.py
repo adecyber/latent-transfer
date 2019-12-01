@@ -122,7 +122,7 @@ def main(_):
     boundaries = [600000, 1000000]
     values = [3e-4, 9e-5, 5e-5]
     learning_rate = tf.compat.v1.train.piecewise_constant(global_step, boundaries, values)
-  tf_agent = sac_agent.SacAgent(
+  tf_agent = latent_agent.SacAgent(
       train_env.time_step_spec(),
       action_spec,
       actor_network=actor_net,
