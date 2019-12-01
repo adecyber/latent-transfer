@@ -17,6 +17,8 @@ from tf_agents.utils import eager_utils
 from tf_agents.utils import nest_utils
 import latent_inference_network
 
+EPS = 1e-20
+
 SacLossInfo = collections.namedtuple(
     'SacLossInfo', ('critic_loss', 'actor_loss', 'alpha_loss'))
 
@@ -305,8 +307,7 @@ class SacAgent(tf_agent.TFAgent):
 
     self.train_step_counter.assign_add(1)
     self._update_target()
-
-    total_loss = critic_loss + actor_loss + alpha_loss + vae_loss
+    total_loss = critic_loss + actor_loss + alpha_loss + tf.dtypes.cast(vae_loss, 'float32')
 
     extra = SacLossInfo(critic_loss=critic_loss,
                         actor_loss=actor_loss,
@@ -557,8 +558,41 @@ class SacAgent(tf_agent.TFAgent):
     
     def _sample_gaussian_noise(means, stddevs):
       return means + stddevs * tf.random_normal(
-            tf.shape(stddevs), 0., 1., dtype=tf.float32)
-   
+            tf.shape(stddevs), 0., 1., dtype=tf.float64)
+    
+    def log_normal(x, mean, stddev):
+      stddev = tf.abs(stddev)
+      stddev = tf.add(stddev, EPS) 
+      return -0.5 * tf.reduce_sum((tf.dtypes.cast(tf.log(2 * np.pi), 'float64') + tf.dtypes.cast(tf.log(tf.square(stddev)), 'float64')) + tf.dtypes.cast(tf.square(x-mean), 'float64') / tf.dtypes.cast(tf.square(stddev), 'float64'), axis=-1)
+      
+      '''
+      return -0.5 * tf.reduce_sum(
+        (tf.log(2 * np.pi) + tf.log(tf.square(stddev))
+         + tf.square(x - mean) / tf.square(stddev)),
+         axis=-1)
+      '''
+    def _normal_kld(z, z_mean, z_stddev, weights=1.0):
+      kld_array = (log_normal(z, z_mean, z_stddev) -
+                      log_normal(z, 0.0, 1.0))
+      return tf.losses.compute_weighted_loss(kld_array, weights)  
+    
+    def l2_loss(targets,
+            outputs,
+            weights=1.0,
+            reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS):
+      loss = 0.5 * tf.reduce_sum(tf.dtypes.cast(tf.square(tf.dtypes.cast(targets, 'float64') - tf.dtypes.cast(outputs, 'float64')), 'float64'), axis=-1)
+      return tf.losses.compute_weighted_loss(loss, weights, reduction=reduction)    
+    def action_loss(targets, outputs, weights=1.0):
+      assert len(targets.shape) == len(outputs.shape)
+      # Weight starting position by 10.
+      return 10.0 * l2_loss(
+        targets=targets[..., :2],
+        outputs=outputs[..., :2],
+        weights=weights) + l2_loss(
+            targets=targets[..., 2:],
+            outputs=outputs[..., 2:],
+            weights=weights)
+
     with tf.name_scope('loss_vae'):
         
       z_means, z_stddevs = self._z_inference_network(
@@ -569,12 +603,12 @@ class SacAgent(tf_agent.TFAgent):
 	(time_steps.observation, zs))
 
       # Losses
-      z_kld = self._normal_kld(
+      z_kld = _normal_kld(
 	zs,
 	z_means,
 	z_stddevs)
 
-      action_loss = self._action_loss(
+      action_loss = action_loss(
 	    actions,
 	    pred_actions) 
 
