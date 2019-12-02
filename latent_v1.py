@@ -27,8 +27,9 @@ from __future__ import print_function
 
 import os
 import time
+import matplotlib
+matplotlib.use("pdf")
 import matplotlib.pyplot as plt
-
 from absl import app
 from absl import flags
 from absl import logging
@@ -54,6 +55,7 @@ from tf_agents.policies import random_tf_policy
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.utils import common
 
+import gym_backcheetah
 
 flags.DEFINE_string('root_dir', os.getenv('TEST_UNDECLARED_OUTPUTS_DIR'),
                     'Root directory for writing logs/summaries/checkpoints.')
@@ -81,10 +83,10 @@ def normal_projection_net(action_spec,
 @gin.configurable
 def train_eval(
     root_dir,
-    env_name='HalfCheetah-v2',
+    env_name='BackCheetah-v0',
     eval_env_name=None,
     env_load_fn=suite_mujoco.load,
-    num_iterations=1000000,
+    num_iterations=3000000,
     actor_fc_layers=(256, 256),
     critic_obs_fc_layers=None,
     critic_action_fc_layers=None,
@@ -110,9 +112,9 @@ def train_eval(
     num_eval_episodes=30,
     eval_interval=10000,
     # Params for summaries and logging
-    train_checkpoint_interval=10000,
-    policy_checkpoint_interval=5000,
-    rb_checkpoint_interval=50000,
+    train_checkpoint_interval=100000,
+    policy_checkpoint_interval=100000,
+    rb_checkpoint_interval=100000,
     log_interval=1000,
     plot_interval=100000,
     summary_interval=1000,
