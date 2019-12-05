@@ -154,8 +154,5 @@ class ActorDistributionNetwork(network.DistributionNetwork):
     zs = state
     output_actions = tf.nest.map_structure(
         lambda proj_net: proj_net(state, outer_rank), self._projection_networks)
-   
-    #import pdb
-    #pdb.set_trace()
     #output_actions = self._action_generator(observations, zs)
     return output_actions, network_state

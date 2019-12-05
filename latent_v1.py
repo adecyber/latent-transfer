@@ -42,6 +42,7 @@ import latent_agent
 from tf_agents.agents.sac import sac_agent
 from tf_agents.drivers import dynamic_step_driver
 from tf_agents.environments import suite_mujoco
+from tf_agents.environments import suite_gym
 from tf_agents.environments import tf_py_environment
 from tf_agents.eval import metric_utils
 from tf_agents.metrics import py_metrics
@@ -85,7 +86,7 @@ def train_eval(
     root_dir,
     env_name='BackCheetah-v0',
     eval_env_name=None,
-    env_load_fn=suite_mujoco.load,
+    env_load_fn=suite_gym.load,
     num_iterations=3000000,
     actor_fc_layers=(256, 256),
     critic_obs_fc_layers=None,
@@ -347,7 +348,7 @@ def train_eval(
         if global_step_val % plot_interval == 0:
           print("Plotting returns...") 
           steps, returns = zip(*returnsCache)
-          # steps = [x - 1100000 for x in steps]
+          steps = [x - 3000000 for x in steps]
           plt.plot(steps, returns)
           plt.ylabel('Average Return')
           plt.xlabel('Step')

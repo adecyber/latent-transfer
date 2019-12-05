@@ -285,7 +285,9 @@ class SacAgent(tf_agent.TFAgent):
     tf.debugging.check_numerics(alpha_loss, 'Alpha loss is inf or nan.')
     alpha_grads = tape.gradient(alpha_loss, alpha_variable)
     self._apply_gradients(alpha_grads, alpha_variable, self._alpha_optimizer)
+   
     
+   # vae_variables = self._z_inference_network.trainable_variables
     vae_variables = (self._z_inference_network.trainable_variables + self._action_generator.trainable_variables)
     with tf.GradientTape() as tape:
       assert vae_variables, ('No trainable vae variables to '

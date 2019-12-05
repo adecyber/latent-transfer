@@ -16,6 +16,7 @@ from tf_agents.networks import network
 from tf_agents.policies import tf_policy
 from tf_agents.trajectories import policy_step
 from tf_agents.specs import tensor_spec
+Z_DIM = 16
 
 @gin.configurable
 class ActorPolicy(tf_policy.Base):
@@ -57,7 +58,7 @@ class ActorPolicy(tf_policy.Base):
     self._observation_normalizer = observation_normalizer
     self._training = training
  
-    self.z_spec = tensor_spec.TensorSpec(shape=[256], dtype=tf.dtypes.float64, name='z')
+    self.z_spec = tensor_spec.TensorSpec(shape=[Z_DIM], dtype=tf.dtypes.float64, name='z')
     print("assigning action generator to ctor")
     action_generator_ctor = latent_action_generator.ActionGenerator
     print("actually initializing action generator with time step spec")
