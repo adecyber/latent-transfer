@@ -9,9 +9,9 @@ import latent_network_robovat
 nest = tf.contrib.framework.nest
 slim = tf.contrib.slim
 
-DIM_Z = 16
-DIM_FC_Z = 22
+DIM_Z = 256
 DIM_FC_ACTION = 6
+DIM_FC_Z = DIM_Z + DIM_FC_ACTION
 NORMALIZER_FN = None
 NORMALIZER_PARAMS = None
 
@@ -28,10 +28,10 @@ def generate_action_single_step(inputs, dim_fc_action):
                 net, dim_fc_action, scope='fc')
             actions = slim.fully_connected(
                 net,
-                6,
+                dim_fc_action,
                 activation_fn=None,
                 normalizer_fn=None,
-                scope='actions')
+                scope='output_actions')
             actions = tf.identity(tf.tanh(actions / 5.0) * 5.0,
                                  'softly_clipped_starts')
     

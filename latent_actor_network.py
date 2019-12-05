@@ -14,6 +14,7 @@ from tf_agents.specs import tensor_spec
 from tf_agents.utils import nest_utils
 
 import latent_action_generator
+Z_DIM = 256
 
 def _categorical_projection_net(action_spec, logits_init_output_factor=0.1):
   return categorical_projection_network.CategoricalProjectionNetwork(
@@ -44,6 +45,7 @@ class ActorDistributionNetwork(network.DistributionNetwork):
   def __init__(self,
                input_tensor_spec,
                output_tensor_spec,
+               action_generator,
                preprocessing_layers=None,
                preprocessing_combiner=None,
                conv_layer_params=None,
@@ -116,9 +118,7 @@ class ActorDistributionNetwork(network.DistributionNetwork):
         kernel_initializer=kernel_initializer,
         batch_squash=batch_squash,
         dtype=dtype)
-
-    action_generator = latent_action_generator.ActionGenerator(input_tensor_spec)
-
+    
     def map_proj(spec):
       if tensor_spec.is_discrete(spec):
         return discrete_projection_net(spec)
@@ -145,14 +145,16 @@ class ActorDistributionNetwork(network.DistributionNetwork):
     return self._output_tensor_spec
 
   def call(self, observations, step_type, network_state, training=False):
-    state, network_state = self._encoder(
+    enc_output, network_state = self._encoder(
         observations,
         step_type=step_type,
         network_state=network_state,
         training=training)
     outer_rank = nest_utils.get_outer_rank(observations, self.input_tensor_spec)
-    zs = state
+    zs = tf.dtypes.cast(enc_output, dtype=tf.float64)
+    #zs = self.project_to_zdim()
+    state = self._action_generator((observations, zs))
+    state = tf.dtypes.cast(state, dtype=tf.float32)
     output_actions = tf.nest.map_structure(
         lambda proj_net: proj_net(state, outer_rank), self._projection_networks)
-    #output_actions = self._action_generator(observations, zs)
     return output_actions, network_state

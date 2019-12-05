@@ -39,6 +39,7 @@ class SacAgent(tf_agent.TFAgent):
                action_spec,
                critic_network,
                actor_network,
+               action_generator,
                actor_optimizer,
                critic_optimizer,
                alpha_optimizer,
@@ -186,7 +187,7 @@ class SacAgent(tf_agent.TFAgent):
     self._summarize_grads_and_vars = summarize_grads_and_vars
     self._update_target = self._get_target_updater(
         tau=self._target_update_tau, period=self._target_update_period)
-    self._action_generator = policy.action_generator
+    self._action_generator = action_generator
     
     z_inference_network_ctor = latent_inference_network.ZInferenceNetwork
     self._z_inference_network = z_inference_network_ctor(input_tensor_spec=(time_step_spec.observation, action_spec))
@@ -266,6 +267,7 @@ class SacAgent(tf_agent.TFAgent):
                           self._critic_optimizer)
 
     trainable_actor_variables = self._actor_network.trainable_variables
+    trainable_actor_variables = [var for var in self._actor_network.trainable_variables if var not in self._action_generator.trainable_variables]
     with tf.GradientTape(watch_accessed_variables=False) as tape:
       assert trainable_actor_variables, ('No trainable actor variables to '
                                          'optimize.')

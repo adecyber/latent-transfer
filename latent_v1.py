@@ -48,13 +48,15 @@ from tf_agents.eval import metric_utils
 from tf_agents.metrics import py_metrics
 from tf_agents.metrics import tf_metrics
 from tf_agents.metrics import tf_py_metric
-from tf_agents.networks import actor_distribution_network
+import latent_actor_network
+import latent_action_generator
 from tf_agents.networks import normal_projection_network
 from tf_agents.policies import greedy_policy
 from tf_agents.policies import py_tf_policy
 from tf_agents.policies import random_tf_policy
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.utils import common
+from tf_agents.specs import tensor_spec
 
 import gym_backcheetah
 
@@ -65,7 +67,7 @@ flags.DEFINE_multi_string('gin_file', None,
 flags.DEFINE_multi_string('gin_param', None, 'Gin binding to pass through.')
 
 FLAGS = flags.FLAGS
-
+Z_DIM = 256
 
 @gin.configurable
 def normal_projection_net(action_spec,
@@ -154,11 +156,15 @@ def train_eval(
     observation_spec = time_step_spec.observation
     action_spec = tf_env.action_spec()
     print("Initializing actor network")
-    actor_net = actor_distribution_network.ActorDistributionNetwork(
+    z_spec = tensor_spec.TensorSpec(shape=[Z_DIM], dtype=tf.dtypes.float64, name='z')
+    action_generator = latent_action_generator.ActionGenerator(input_tensor_spec=(time_step_spec.observation, z_spec))
+    action_generator.create_variables()
+    actor_net = latent_actor_network.ActorDistributionNetwork(
         observation_spec,
         action_spec,
         fc_layer_params=actor_fc_layers,
-        continuous_projection_net=normal_projection_net)
+        continuous_projection_net=normal_projection_net,
+        action_generator=action_generator)
     critic_net = critic_network.CriticNetwork(
         (observation_spec, action_spec),
         observation_fc_layer_params=critic_obs_fc_layers,
@@ -169,6 +175,7 @@ def train_eval(
         time_step_spec,
         action_spec,
         actor_network=actor_net,
+        action_generator=action_generator,
         critic_network=critic_net,
         actor_optimizer=tf.compat.v1.train.AdamOptimizer(
             learning_rate=actor_learning_rate),
