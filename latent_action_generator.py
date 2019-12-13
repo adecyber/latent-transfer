@@ -55,7 +55,7 @@ class ActionGenerator(latent_network_robovat.Network):
     def call(self, input_tensor, step_type=None, network_states=()):
         del step_type    # unused.
         print("Running action generator")
-        observations = input_tensor[0]
+        observations = tf.dtypes.cast(input_tensor[0], tf.float64)
         zs = input_tensor[1]
         decoder_input = tf.concat([observations, zs], 1)
         

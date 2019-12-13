@@ -355,7 +355,7 @@ def train_eval(
         if global_step_val % plot_interval == 0:
           print("Plotting returns...") 
           steps, returns = zip(*returnsCache)
-          steps = [x - 3000000 for x in steps]
+          #steps = [x - 1600000 for x in steps]
           plt.plot(steps, returns)
           plt.ylabel('Average Return')
           plt.xlabel('Step')
