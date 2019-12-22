@@ -7,5 +7,6 @@ pip install -r requirements.txt
 
 In order to run with default hyperparameters, run the following in the master directory:
 ```
+mkdir ./output
 python latent.py --root_dir "./output"
 ```
