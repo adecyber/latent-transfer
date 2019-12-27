@@ -13,8 +13,10 @@ class TwentyCheetahEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         xposafter = self.sim.data.qpos[0]
         ob = self._get_obs()
         reward_ctrl = - 0.1 * np.square(action).sum()
-        reward_run = (xposbefore - xposafter)/self.dt
-        reward_run = 1.0 / np.abs(reward_run - 20)
+        velocity = (xposbefore - xposafter)/self.dt
+        print("velocity: {}".format(velocity))
+        reward_run = -((velocity - 20)**2)
+        print("reward_run: {}".format(reward_run))
         reward = reward_ctrl + reward_run
         done = False
         return ob, reward, done, dict(reward_run=reward_run, reward_ctrl=reward_ctrl)
