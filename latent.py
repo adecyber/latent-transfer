@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-r"""Train and Eval SAC.
+"""Train and Eval SAC.
 To run:
 ```bash
 tensorboard --logdir $HOME/tmp/sac_v1/gym/HalfCheetah-v2/ --port 2223 &
@@ -59,12 +59,14 @@ from tf_agents.utils import common
 from tf_agents.specs import tensor_spec
 
 import gym_backcheetah
+import gym_twentycheetah
 
 flags.DEFINE_string('root_dir', os.getenv('TEST_UNDECLARED_OUTPUTS_DIR'),
                     'Root directory for writing logs/summaries/checkpoints.')
 flags.DEFINE_multi_string('gin_file', None,
                           'Path to the gin config files.')
 flags.DEFINE_multi_string('gin_param', None, 'Gin binding to pass through.')
+flags.DEFINE_bool('finetune', False, 'flag to specify finetuning')
 
 FLAGS = flags.FLAGS
 Z_DIM = 256
@@ -86,6 +88,7 @@ def normal_projection_net(action_spec,
 @gin.configurable
 def train_eval(
     root_dir,
+    finetune,
     env_name='BackCheetah-v0',
     eval_env_name=None,
     env_load_fn=suite_gym.load,
@@ -174,6 +177,7 @@ def train_eval(
     tf_agent = latent_agent.SacAgent(
         time_step_spec,
         action_spec,
+        finetune,
         actor_network=actor_net,
         action_generator=action_generator,
         critic_network=critic_net,
@@ -355,7 +359,8 @@ def train_eval(
         if global_step_val % plot_interval == 0:
           print("Plotting returns...") 
           steps, returns = zip(*returnsCache)
-          steps = [x - 3000000 for x in steps]
+          if finetune:
+            steps = [x - 3000000 for x in steps]
           plt.plot(steps, returns)
           plt.ylabel('Average Return')
           plt.xlabel('Step')
@@ -367,7 +372,7 @@ def main(_):
   tf.compat.v1.enable_resource_variables()
   logging.set_verbosity(logging.INFO)
   gin.parse_config_files_and_bindings(FLAGS.gin_file, FLAGS.gin_param)
-  train_eval(FLAGS.root_dir)
+  train_eval(FLAGS.root_dir, FLAGS.finetune)
 
 
 if __name__ == '__main__':

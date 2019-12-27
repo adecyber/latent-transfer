@@ -37,6 +37,7 @@ class SacAgent(tf_agent.TFAgent):
   def __init__(self,
                time_step_spec,
                action_spec,
+               finetune,
                critic_network,
                actor_network,
                action_generator,
@@ -173,6 +174,7 @@ class SacAgent(tf_agent.TFAgent):
           for single_spec in flat_action_spec
       ])
 
+    self._finetune = finetune
     self._target_update_tau = target_update_tau
     self._target_update_period = target_update_period
     self._actor_optimizer = actor_optimizer
@@ -288,19 +290,18 @@ class SacAgent(tf_agent.TFAgent):
     alpha_grads = tape.gradient(alpha_loss, alpha_variable)
     self._apply_gradients(alpha_grads, alpha_variable, self._alpha_optimizer)
    
-    
-   # vae_variables = self._z_inference_network.trainable_variables
-    vae_variables = (self._z_inference_network.trainable_variables + self._action_generator.trainable_variables)
-    with tf.GradientTape() as tape:
-      assert vae_variables, ('No trainable vae variables to '
-                                         'optimize.')
-      tape.watch(vae_variables)
-      print("Computing VAE Loss")
-      vae_loss = self.vae_loss(time_steps, actions, next_time_steps)
-    tf.debugging.check_numerics(vae_loss, 'VAE loss is inf or nan.')
-    vae_grads = tape.gradient(vae_loss, vae_variables)
-    self._apply_gradients(vae_grads, vae_variables, self._actor_optimizer) 
-   
+    if not self._finetune: 
+      vae_variables = (self._z_inference_network.trainable_variables + self._action_generator.trainable_variables)
+      with tf.GradientTape() as tape:
+        assert vae_variables, ('No trainable vae variables to '
+                                           'optimize.')
+        tape.watch(vae_variables)
+        print("Computing VAE Loss")
+        vae_loss = self.vae_loss(time_steps, actions, next_time_steps)
+      tf.debugging.check_numerics(vae_loss, 'VAE loss is inf or nan.')
+      vae_grads = tape.gradient(vae_loss, vae_variables)
+      self._apply_gradients(vae_grads, vae_variables, self._actor_optimizer) 
+
     with tf.name_scope('Losses'):
       tf.compat.v2.summary.scalar(
           name='critic_loss', data=critic_loss, step=self.train_step_counter)
@@ -311,7 +312,10 @@ class SacAgent(tf_agent.TFAgent):
 
     self.train_step_counter.assign_add(1)
     self._update_target()
-    total_loss = critic_loss + actor_loss + alpha_loss + tf.dtypes.cast(vae_loss, 'float32')
+    if not self._finetune:
+      total_loss = critic_loss + actor_loss + alpha_loss + tf.dtypes.cast(vae_loss, 'float32')
+    else:
+      total_loss = critic_loss + actor_loss + alpha_loss
 
     extra = SacLossInfo(critic_loss=critic_loss,
                         actor_loss=actor_loss,
