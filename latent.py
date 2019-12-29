@@ -89,7 +89,7 @@ def normal_projection_net(action_spec,
 def train_eval(
     root_dir,
     finetune,
-    env_name='BackCheetah-v0',
+    env_name='HalfCheetah-v2',
     eval_env_name=None,
     env_load_fn=suite_gym.load,
     num_iterations=3000000,
