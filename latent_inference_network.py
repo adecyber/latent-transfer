@@ -9,7 +9,7 @@ import latent_network_robovat
 nest = tf.contrib.framework.nest
 slim = tf.contrib.slim
 
-DIM_Z = 256
+DIM_Z = 16
 DIM_FC_ACTION = 6
 DIM_FC_Z = DIM_Z + DIM_FC_ACTION
 NORMALIZER_FN = None

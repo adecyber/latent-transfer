@@ -14,7 +14,7 @@ from tf_agents.specs import tensor_spec
 from tf_agents.utils import nest_utils
 
 import latent_action_generator
-Z_DIM = 256
+Z_DIM = 16
 
 def _categorical_projection_net(action_spec, logits_init_output_factor=0.1):
   return categorical_projection_network.CategoricalProjectionNetwork(
@@ -150,11 +150,34 @@ class ActorDistributionNetwork(network.DistributionNetwork):
         step_type=step_type,
         network_state=network_state,
         training=training)
-    outer_rank = nest_utils.get_outer_rank(observations, self.input_tensor_spec)
+    # pdb.set_trace()
+    # with slim.arg_scope(
+    #         [slim.fully_connected],
+    #         activation_fn=tf.nn.relu,
+    #         normalizer_fn=NORMALIZER_FN,
+    #         normalizer_params=NORMALIZER_PARAMS):
+
+    #     with tf.variable_scope('encode'):
+    #         net = inputs
+    #         net = slim.fully_connected(
+    #             net, dim_fc_action, scope='fc')
+    #         actions = slim.fully_connected(
+    #             net,
+    #             dim_fc_action,
+    #             activation_fn=None,
+    #             normalizer_fn=None,
+    #             scope='output_actions')
+    #         actions = tf.identity(tf.tanh(actions / 5.0) * 5.0,
+    #                              'softly_clipped_starts')
+
+    # outer_rank = nest_utils.get_outer_rank(observations, self.input_tensor_spec)
     zs = tf.dtypes.cast(enc_output, dtype=tf.float64)
     #zs = self.project_to_zdim()
-    state = self._action_generator((observations, zs))
-    state = tf.dtypes.cast(state, dtype=tf.float32)
-    output_actions = tf.nest.map_structure(
-        lambda proj_net: proj_net(state, outer_rank), self._projection_networks)
+    output_actions = self._action_generator((observations, zs))
+    import pdb
+    pdb.set_trace()
+    # state = tf.dtypes.cast(state, dtype=tf.float32)
+    # output_actions = tf.nest.map_structure(
+    #     lambda proj_net: proj_net(state, outer_rank), self._projection_networks)
+    # pdb.set_trace()
     return output_actions, network_state

@@ -20,4 +20,5 @@ tf-agents-nightly==0.2.0.dev20190831
 tb-nightly==1.15.0a20190831
 tf-estimator-nightly==1.14.0.dev2019083101
 tfp-nightly==0.9.0.dev20190831
--e git+https://github.com/bulletphysics/bullet3@6a74f63604ceecd1db5c71036ffb0dbf17294579#egg=pybullet
+mujoco_py
+#-e git+https://github.com/bulletphysics/bullet3@6a74f63604ceecd1db5c71036ffb0dbf17294579#egg=pybullet

@@ -468,6 +468,8 @@ class SacAgent(tf_agent.TFAgent):
       actor_loss: A scalar actor loss.
     """
     with tf.name_scope('actor_loss'):
+      import pdb
+      pdb.set_trace()
       tf.nest.assert_same_structure(time_steps, self.time_step_spec)
 
       actions, log_pi = self._actions_and_log_probs(time_steps)

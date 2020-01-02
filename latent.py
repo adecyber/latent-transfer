@@ -41,7 +41,7 @@ from tf_agents.agents.ddpg import critic_network
 import latent_agent
 from tf_agents.agents.sac import sac_agent
 from tf_agents.drivers import dynamic_step_driver
-from tf_agents.environments import suite_mujoco
+# from tf_agents.environments import suite_mujoco
 from tf_agents.environments import suite_gym
 from tf_agents.environments import tf_py_environment
 from tf_agents.eval import metric_utils
@@ -58,8 +58,8 @@ from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.utils import common
 from tf_agents.specs import tensor_spec
 
-import gym_backcheetah
-import gym_twentycheetah
+# import gym_backcheetah
+# import gym_twentycheetah
 
 flags.DEFINE_string('root_dir', os.getenv('TEST_UNDECLARED_OUTPUTS_DIR'),
                     'Root directory for writing logs/summaries/checkpoints.')
@@ -69,7 +69,7 @@ flags.DEFINE_multi_string('gin_param', None, 'Gin binding to pass through.')
 flags.DEFINE_bool('finetune', False, 'flag to specify finetuning')
 
 FLAGS = flags.FLAGS
-Z_DIM = 256
+Z_DIM = 16
 
 @gin.configurable
 def normal_projection_net(action_spec,
@@ -93,7 +93,7 @@ def train_eval(
     eval_env_name=None,
     env_load_fn=suite_gym.load,
     num_iterations=3000000,
-    actor_fc_layers=(256, 256),
+    actor_fc_layers=(256, 256, 16),
     critic_obs_fc_layers=None,
     critic_action_fc_layers=None,
     critic_joint_fc_layers=(256, 256),
@@ -153,14 +153,17 @@ def train_eval(
     tf_env = tf_py_environment.TFPyEnvironment(env_load_fn(env_name))
     eval_env_name = eval_env_name or env_name
     eval_py_env = env_load_fn(eval_env_name)
-
     # Get the data specs from the environment
     time_step_spec = tf_env.time_step_spec()
     observation_spec = time_step_spec.observation
     action_spec = tf_env.action_spec()
     print("Initializing actor network")
+    import pdb
+    pdb.set_trace()
     z_spec = tensor_spec.TensorSpec(shape=[Z_DIM], dtype=tf.dtypes.float64, name='z')
-    action_generator = latent_action_generator.ActionGenerator(input_tensor_spec=(time_step_spec.observation, z_spec))
+    pdb.set_trace()
+    action_generator = latent_action_generator.ActionGenerator(input_tensor_spec=(time_step_spec.observation, z_spec), 
+      output_tensor_spec=action_spec)
     action_generator.create_variables()
     actor_net = latent_actor_network.ActorDistributionNetwork(
         observation_spec,
