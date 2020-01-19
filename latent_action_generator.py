@@ -8,6 +8,7 @@ import latent_network_robovat
 from tf_agents.specs import tensor_spec
 from tf_agents.networks import categorical_projection_network
 from tf_agents.networks import normal_projection_network
+from tf_agents.utils import nest_utils
 import numpy as np
 
 
@@ -83,8 +84,7 @@ class ActionGenerator(latent_network_robovat.Network):
             return discrete_projection_net(spec)
           else:
             return continuous_projection_net(spec)
-        import pdb
-        pdb.set_trace
+      
         projection_networks = tf.nest.map_structure(map_proj, self._output_tensor_spec)
 
         self._input_tensor_spec = input_tensor_spec
@@ -96,14 +96,11 @@ class ActionGenerator(latent_network_robovat.Network):
         observations = input_tensor[0]
         zs = input_tensor[1]
         decoder_input = tf.concat([observations, zs], 1)
-
-        outer_rank = int(observations.shape[0])
+        outer_rank = nest_utils.get_outer_rank(observations, self.input_tensor_spec[0])
         state = generate_action_single_step(
            decoder_input,
            dim_fc_action=self._dim_fc_action)
         state = tf.dtypes.cast(state, dtype=tf.float32)
-        import pdb
-        pdb.set_trace()
         output_actions = tf.nest.map_structure(
-            lambda proj_net: proj_net(state, outer_rank), self._projection_networks)
+            lambda proj_net: proj_net(state, outer_rank)[0], self._projection_networks)
         return output_actions

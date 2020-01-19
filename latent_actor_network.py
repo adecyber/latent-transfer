@@ -174,8 +174,6 @@ class ActorDistributionNetwork(network.DistributionNetwork):
     zs = tf.dtypes.cast(enc_output, dtype=tf.float64)
     #zs = self.project_to_zdim()
     output_actions = self._action_generator((observations, zs))
-    import pdb
-    pdb.set_trace()
     # state = tf.dtypes.cast(state, dtype=tf.float32)
     # output_actions = tf.nest.map_structure(
     #     lambda proj_net: proj_net(state, outer_rank), self._projection_networks)

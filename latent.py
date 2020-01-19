@@ -98,7 +98,7 @@ def train_eval(
     critic_action_fc_layers=None,
     critic_joint_fc_layers=(256, 256),
     # Params for collect
-    initial_collect_steps=10000,
+    initial_collect_steps=1,
     collect_steps_per_iteration=1,
     replay_buffer_capacity=1000000,
     # Params for target update
@@ -158,10 +158,7 @@ def train_eval(
     observation_spec = time_step_spec.observation
     action_spec = tf_env.action_spec()
     print("Initializing actor network")
-    import pdb
-    pdb.set_trace()
     z_spec = tensor_spec.TensorSpec(shape=[Z_DIM], dtype=tf.dtypes.float64, name='z')
-    pdb.set_trace()
     action_generator = latent_action_generator.ActionGenerator(input_tensor_spec=(time_step_spec.observation, z_spec), 
       output_tensor_spec=action_spec)
     action_generator.create_variables()
@@ -177,7 +174,7 @@ def train_eval(
         action_fc_layer_params=critic_action_fc_layers,
         joint_fc_layer_params=critic_joint_fc_layers)
     print("Initializing latent agent")
-    tf_agent = latent_agent.SacAgent(
+    agent = latent_agent.SacAgent(
         time_step_spec,
         action_spec,
         finetune,
@@ -202,13 +199,13 @@ def train_eval(
 
     # Make the replay buffer.
     replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
-        data_spec=tf_agent.collect_data_spec,
+        data_spec=agent.collect_data_spec,
         batch_size=1,
         max_length=replay_buffer_capacity)
     replay_observer = [replay_buffer.add_batch]
 
     eval_py_policy = py_tf_policy.PyTFPolicy(
-        greedy_policy.GreedyPolicy(tf_agent.policy))
+        greedy_policy.GreedyPolicy(agent.policy))
 
     train_metrics = [
         tf_metrics.NumberOfEpisodes(),
@@ -217,7 +214,7 @@ def train_eval(
         tf_py_metric.TFPyMetric(py_metrics.AverageEpisodeLengthMetric()),
     ]
 
-    collect_policy = tf_agent.collect_policy
+    collect_policy = agent.collect_policy
     initial_collect_policy = random_tf_policy.RandomTFPolicy(
         tf_env.time_step_spec(), tf_env.action_spec())
 
@@ -243,7 +240,7 @@ def train_eval(
                 batch_size * 5)
     dataset_iterator = tf.compat.v1.data.make_initializable_iterator(dataset)
     trajectories, unused_info = dataset_iterator.get_next()
-    train_op = tf_agent.train(trajectories)
+    train_op = agent.train(trajectories)
 
     summary_ops = []
     for train_metric in train_metrics:
@@ -257,12 +254,12 @@ def train_eval(
 
     train_checkpointer = common.Checkpointer(
         ckpt_dir=train_dir,
-        agent=tf_agent,
+        agent=agent,
         global_step=global_step,
         metrics=metric_utils.MetricsGroup(train_metrics, 'train_metrics'))
     policy_checkpointer = common.Checkpointer(
         ckpt_dir=os.path.join(train_dir, 'policy'),
-        policy=tf_agent.policy,
+        policy=agent.policy,
         global_step=global_step)
     rb_checkpointer = common.Checkpointer(
         ckpt_dir=os.path.join(train_dir, 'replay_buffer'),
@@ -329,6 +326,9 @@ def train_eval(
         time_acc += time.time() - start_time
         global_step_val = global_step_call()
         if global_step_val % log_interval == 0:
+          # info_buffer = agent.get_info()
+          # tf.print(info_buffer["vae_loss"])
+          # raise NotImplementedError
           logging.info('step = %d, loss = %f', global_step_val, total_loss.loss)
           steps_per_sec = (global_step_val - timed_at_step) / time_acc
           logging.info('%.3f steps/sec', steps_per_sec)
