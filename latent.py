@@ -57,9 +57,11 @@ from tf_agents.policies import random_tf_policy
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.utils import common
 from tf_agents.specs import tensor_spec
-
+from rlkit.envs import ENVS
+from rlkit.envs.wrappers import NormalizedBoxEnv
 # import gym_backcheetah
 # import gym_twentycheetah
+import gym_cheetahvel
 
 flags.DEFINE_string('root_dir', os.getenv('TEST_UNDECLARED_OUTPUTS_DIR'),
                     'Root directory for writing logs/summaries/checkpoints.')
@@ -89,7 +91,7 @@ def normal_projection_net(action_spec,
 def train_eval(
     root_dir,
     finetune,
-    env_name='HalfCheetah-v2',
+    env_name='CheetahVel-v0',
     eval_env_name=None,
     env_load_fn=suite_gym.load,
     num_iterations=3000000,
@@ -98,7 +100,7 @@ def train_eval(
     critic_action_fc_layers=None,
     critic_joint_fc_layers=(256, 256),
     # Params for collect
-    initial_collect_steps=1,
+    initial_collect_steps=10000,
     collect_steps_per_iteration=1,
     replay_buffer_capacity=1000000,
     # Params for target update
@@ -150,6 +152,9 @@ def train_eval(
   with tf.compat.v2.summary.record_if(
       lambda: tf.math.equal(global_step % summary_interval, 0)):
     # Create the environment.
+    # env_params = {"n_tasks": 2}
+    # env = NormalizedBoxEnv(ENVS["cheetah-dir"](env_params))
+    # tf_env_2 = tf_py_environment.TFPyEnvironment(env)
     tf_env = tf_py_environment.TFPyEnvironment(env_load_fn(env_name))
     eval_env_name = eval_env_name or env_name
     eval_py_env = env_load_fn(eval_env_name)
