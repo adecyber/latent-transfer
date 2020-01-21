@@ -96,7 +96,6 @@ def train_eval(
     eval_env_name=None,
     env_load_fn=suite_gym.load,
     train_tasks=10,
-    eval_tasks=3,
     num_iterations=3000000,
     actor_fc_layers=(256, 256, 16),
     critic_obs_fc_layers=None,
@@ -159,14 +158,12 @@ def train_eval(
     # env = NormalizedBoxEnv(ENVS["cheetah-dir"](env_params))
     # tf_env_2 = tf_py_environment.TFPyEnvironment(env)
     tf_env = {}
-    for idx in range(train_tasks):
-      tf_env[idx] = tf_py_environment.TFPyEnvironment(env_load_fn(env_name))
-    
-    # tf_env = env_load_fn(env_name)
-    eval_env_name = eval_env_name or env_name
     eval_py_env = {}
-    for idx in range(eval_tasks):
-      eval_py_env[idx] = env_load_fn(eval_env_name)
+    for idx in range(train_tasks):
+      loaded_env = env_load_fn(env_name)
+      eval_py_env[idx] = loaded_env
+      tf_env[idx] = tf_py_environment.TFPyEnvironment(loaded_env)
+  
     # Get the data specs from the environment
     time_step_spec = tf_env[0].time_step_spec()
     observation_spec = time_step_spec.observation
@@ -300,7 +297,7 @@ def train_eval(
 
       if global_step_val == 0:
         # Initial eval of randomly initialized policy
-        for idx in range(eval_tasks):
+        for idx in range(train_tasks):
           metric_utils.compute_summaries(
               eval_metrics,
               eval_py_env[idx],
@@ -366,7 +363,7 @@ def train_eval(
 
         if global_step_val % eval_interval == 0:
           average_across_tasks = 0
-          for idx in range(eval_tasks):
+          for idx in range(train_tasks):
             metrics = metric_utils.compute_summaries(
                 eval_metrics,
                 eval_py_env[idx],
@@ -392,7 +389,7 @@ def train_eval(
           print("Plotting returns...") 
           steps, returns = zip(*returnsCache)
           if finetune:
-            steps = [x - 3000000 for x in steps]
+            steps = [x - num_iterations for x in steps]
           plt.plot(steps, returns)
           plt.ylabel('Average Return')
           plt.xlabel('Step')
