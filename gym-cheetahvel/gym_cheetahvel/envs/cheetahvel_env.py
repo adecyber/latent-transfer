@@ -24,7 +24,7 @@ class CheetahVelEnv(HalfCheetahEnv):
         model-based control", 2012
         (https://homes.cs.washington.edu/~todorov/papers/TodorovIROS12.pdf)
     """
-    def __init__(self, task={}, n_tasks=2, randomize_tasks=True):
+    def __init__(self, task={}, n_tasks=1, randomize_tasks=True):
         self._task = task
         self.tasks = self.sample_tasks(n_tasks)
         self._goal_vel = self.tasks[0].get('velocity', 0.0)

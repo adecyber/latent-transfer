@@ -62,6 +62,7 @@ from rlkit.envs.wrappers import NormalizedBoxEnv
 # import gym_backcheetah
 # import gym_twentycheetah
 import gym_cheetahvel
+import gym
 
 flags.DEFINE_string('root_dir', os.getenv('TEST_UNDECLARED_OUTPUTS_DIR'),
                     'Root directory for writing logs/summaries/checkpoints.')
@@ -94,6 +95,8 @@ def train_eval(
     env_name='CheetahVel-v0',
     eval_env_name=None,
     env_load_fn=suite_gym.load,
+    train_tasks=10,
+    eval_tasks=3,
     num_iterations=3000000,
     actor_fc_layers=(256, 256, 16),
     critic_obs_fc_layers=None,
@@ -155,13 +158,20 @@ def train_eval(
     # env_params = {"n_tasks": 2}
     # env = NormalizedBoxEnv(ENVS["cheetah-dir"](env_params))
     # tf_env_2 = tf_py_environment.TFPyEnvironment(env)
-    tf_env = tf_py_environment.TFPyEnvironment(env_load_fn(env_name))
+    tf_env = {}
+    for idx in range(train_tasks):
+      tf_env[idx] = tf_py_environment.TFPyEnvironment(env_load_fn(env_name))
+    
+    # tf_env = env_load_fn(env_name)
     eval_env_name = eval_env_name or env_name
-    eval_py_env = env_load_fn(eval_env_name)
+    eval_py_env = {}
+    for idx in range(eval_tasks):
+      eval_py_env[idx] = env_load_fn(eval_env_name)
     # Get the data specs from the environment
-    time_step_spec = tf_env.time_step_spec()
+    time_step_spec = tf_env[0].time_step_spec()
     observation_spec = time_step_spec.observation
-    action_spec = tf_env.action_spec()
+    action_spec = tf_env[0].action_spec()
+
     print("Initializing actor network")
     z_spec = tensor_spec.TensorSpec(shape=[Z_DIM], dtype=tf.dtypes.float64, name='z')
     action_generator = latent_action_generator.ActionGenerator(input_tensor_spec=(time_step_spec.observation, z_spec), 
@@ -221,19 +231,23 @@ def train_eval(
 
     collect_policy = agent.collect_policy
     initial_collect_policy = random_tf_policy.RandomTFPolicy(
-        tf_env.time_step_spec(), tf_env.action_spec())
+        tf_env[0].time_step_spec(), tf_env[0].action_spec())
 
-    initial_collect_op = dynamic_step_driver.DynamicStepDriver(
-        tf_env,
-        initial_collect_policy,
-        observers=replay_observer + train_metrics,
-        num_steps=initial_collect_steps).run()
+    initial_collect_op = {}
+    for idx in range(train_tasks):
+      initial_collect_op[idx] = dynamic_step_driver.DynamicStepDriver(
+          tf_env[idx],
+          initial_collect_policy,
+          observers=replay_observer + train_metrics,
+          num_steps=initial_collect_steps).run()
 
-    collect_op = dynamic_step_driver.DynamicStepDriver(
-        tf_env,
-        collect_policy,
-        observers=replay_observer + train_metrics,
-        num_steps=collect_steps_per_iteration).run()
+    collect_op = {}
+    for idx in range(train_tasks):
+      collect_op[idx] = dynamic_step_driver.DynamicStepDriver(
+          tf_env[idx],
+          collect_policy,
+          observers=replay_observer + train_metrics,
+          num_steps=collect_steps_per_iteration).run()
 
     # Prepare replay buffer as dataset with invalid transitions filtered.
     def _filter_invalid_transition(trajectories, unused_arg1):
@@ -286,21 +300,25 @@ def train_eval(
 
       if global_step_val == 0:
         # Initial eval of randomly initialized policy
-        metric_utils.compute_summaries(
-            eval_metrics,
-            eval_py_env,
-            eval_py_policy,
-            num_episodes=num_eval_episodes,
-            global_step=global_step_val,
-            callback=eval_metrics_callback,
-            log=True,
-        )
-        sess.run(eval_summary_flush_op)
+        for idx in range(eval_tasks):
+          metric_utils.compute_summaries(
+              eval_metrics,
+              eval_py_env[idx],
+              eval_py_policy,
+              num_episodes=num_eval_episodes,
+              global_step=global_step_val,
+              callback=eval_metrics_callback,
+              log=True,
+          )
+          sess.run(eval_summary_flush_op)
 
         # Run initial collect.
         logging.info('Global step %d: Running initial collect op.',
-                     global_step_val)
-        sess.run(initial_collect_op)
+                     global_step_val) 
+
+        for idx in range(train_tasks):
+          sess.run(initial_collect_op[idx])
+
 
         # Checkpoint the initial replay buffer contents.
         rb_checkpointer.save(global_step=global_step_val)
@@ -310,7 +328,9 @@ def train_eval(
         logging.info('Global step %d: Skipping initial collect op.',
                      global_step_val)
 
-      collect_call = sess.make_callable(collect_op)
+      collect_call = {}
+      for idx in range(train_tasks):
+        collect_call[idx] = sess.make_callable(collect_op[idx])
       train_step_call = sess.make_callable([train_op, summary_ops])
       global_step_call = sess.make_callable(global_step)
 
@@ -325,7 +345,8 @@ def train_eval(
       returnsCache = []
       for _ in range(num_iterations):
         start_time = time.time()
-        collect_call()
+        for idx in range(train_tasks):
+          collect_call[idx]()
         for _ in range(train_steps_per_iteration):
           total_loss, _ = train_step_call()
         time_acc += time.time() - start_time
@@ -344,17 +365,20 @@ def train_eval(
           time_acc = 0
 
         if global_step_val % eval_interval == 0:
-          metrics = metric_utils.compute_summaries(
-              eval_metrics,
-              eval_py_env,
-              eval_py_policy,
-              num_episodes=num_eval_episodes,
-              global_step=global_step_val,
-              callback=eval_metrics_callback,
-              log=True,
-          )
-          sess.run(eval_summary_flush_op)
-          returnsCache.append((global_step_val, metrics["AverageReturn"]))
+          average_across_tasks = 0
+          for idx in range(eval_tasks):
+            metrics = metric_utils.compute_summaries(
+                eval_metrics,
+                eval_py_env[idx],
+                eval_py_policy,
+                num_episodes=num_eval_episodes,
+                global_step=global_step_val,
+                callback=eval_metrics_callback,
+                log=True,
+            )
+            average_across_tasks += metrics["AverageReturn"] / eval_tasks
+            sess.run(eval_summary_flush_op)
+          returnsCache.append((global_step_val, average_across_tasks))
         if global_step_val % train_checkpoint_interval == 0:
           train_checkpointer.save(global_step=global_step_val)
 
