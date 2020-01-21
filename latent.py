@@ -59,8 +59,7 @@ from tf_agents.utils import common
 from tf_agents.specs import tensor_spec
 from rlkit.envs import ENVS
 from rlkit.envs.wrappers import NormalizedBoxEnv
-# import gym_backcheetah
-# import gym_twentycheetah
+import gym_backcheetah
 import gym_cheetahvel
 import gym
 
@@ -70,6 +69,7 @@ flags.DEFINE_multi_string('gin_file', None,
                           'Path to the gin config files.')
 flags.DEFINE_multi_string('gin_param', None, 'Gin binding to pass through.')
 flags.DEFINE_bool('finetune', False, 'flag to specify finetuning')
+flags.DEFINE_bool('direc', False, 'flag to specify special envs setup')
 
 FLAGS = flags.FLAGS
 Z_DIM = 16
@@ -92,6 +92,7 @@ def normal_projection_net(action_spec,
 def train_eval(
     root_dir,
     finetune,
+    direc,
     env_name='CheetahVel-v0',
     eval_env_name=None,
     env_load_fn=suite_gym.load,
@@ -159,10 +160,21 @@ def train_eval(
     # tf_env_2 = tf_py_environment.TFPyEnvironment(env)
     tf_env = {}
     eval_py_env = {}
-    for idx in range(train_tasks):
-      loaded_env = env_load_fn(env_name)
-      eval_py_env[idx] = loaded_env
-      tf_env[idx] = tf_py_environment.TFPyEnvironment(loaded_env)
+
+    if direc:
+      loaded_env_1 = env_load_fn("HalfCheetah-v2")
+      loaded_env_2 = env_load_fn("BackCheetah-v0")
+      eval_py_env[0] = loaded_env_1
+      eval_py_env[1] = loaded_env_2
+      tf_env[0] = tf_py_environment.TFPyEnvironment(loaded_env_1)
+      tf_env[1] = tf_py_environment.TFPyEnvironment(loaded_env_2)
+      train_tasks = 2
+
+    else:
+      for idx in range(train_tasks):
+        loaded_env = env_load_fn(env_name)
+        eval_py_env[idx] = loaded_env
+        tf_env[idx] = tf_py_environment.TFPyEnvironment(loaded_env)
   
     # Get the data specs from the environment
     time_step_spec = tf_env[0].time_step_spec()
@@ -374,7 +386,7 @@ def train_eval(
                 callback=eval_metrics_callback,
                 log=True,
             )
-            average_across_tasks += metrics["AverageReturn"] / eval_tasks
+            average_across_tasks += metrics["AverageReturn"] / train_tasks
             sess.run(eval_summary_flush_op)
           returnsCache.append((global_step_val, average_across_tasks))
         if global_step_val % train_checkpoint_interval == 0:
@@ -402,7 +414,7 @@ def main(_):
   tf.compat.v1.enable_resource_variables()
   logging.set_verbosity(logging.INFO)
   gin.parse_config_files_and_bindings(FLAGS.gin_file, FLAGS.gin_param)
-  train_eval(FLAGS.root_dir, FLAGS.finetune)
+  train_eval(FLAGS.root_dir, FLAGS.finetune, FLAGS.direc)
 
 
 if __name__ == '__main__':
