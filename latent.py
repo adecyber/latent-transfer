@@ -297,17 +297,18 @@ def train_eval(
 
       if global_step_val == 0:
         # Initial eval of randomly initialized policy
-        for idx in range(train_tasks):
-          metric_utils.compute_summaries(
-              eval_metrics,
-              eval_py_env[idx],
-              eval_py_policy,
-              num_episodes=num_eval_episodes,
-              global_step=global_step_val,
-              callback=eval_metrics_callback,
-              log=True,
-          )
-          sess.run(eval_summary_flush_op)
+        if finetune:
+          for idx in range(train_tasks):
+            metric_utils.compute_summaries(
+                eval_metrics,
+                eval_py_env[idx],
+                eval_py_policy,
+                num_episodes=num_eval_episodes,
+                global_step=global_step_val,
+                callback=eval_metrics_callback,
+                log=True,
+            )
+            sess.run(eval_summary_flush_op)
 
         # Run initial collect.
         logging.info('Global step %d: Running initial collect op.',
@@ -361,7 +362,7 @@ def train_eval(
           timed_at_step = global_step_val
           time_acc = 0
 
-        if global_step_val % eval_interval == 0:
+        if global_step_val % eval_interval == 0 and finetune:
           average_across_tasks = 0
           for idx in range(train_tasks):
             metrics = metric_utils.compute_summaries(
@@ -385,7 +386,7 @@ def train_eval(
         if global_step_val % rb_checkpoint_interval == 0:
           rb_checkpointer.save(global_step=global_step_val)
 
-        if global_step_val % plot_interval == 0:
+        if global_step_val % plot_interval == 0 and finetune:
           print("Plotting returns...") 
           steps, returns = zip(*returnsCache)
           if finetune:
