@@ -5,8 +5,23 @@ In order to install dependencies, run the following (Note: Mujoco package requir
 pip install -r requirements.txt
 ```
 
-In order to run with default hyperparameters, run the following in the master directory:
+In order to run a metalearning experiment, run:
 ```
 mkdir ./output
-python latent.py --root_dir "./output"
+python latent.py --root_dir "./output" --direc
+```
+to metatrain on forward and backward running, or run
+```
+mkdir ./output
+python latent.py --root_dir "./output" 
+```
+to metatrain on different velocities for half cheetah
+
+Then to metatest, run
+```
+python latent.py --root_dir "./output" --direc --finetune
+```
+or 
+```
+python latent.py --root_dir "./output" --finetune
 ```
