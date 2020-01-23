@@ -402,7 +402,7 @@ def train_eval(
           print("Plotting returns...") 
           steps, returns = zip(*returnsCache)
           if finetune:
-            steps = [x - num_iterations for x in steps]
+            steps = [x - 2000000 for x in steps]
           plt.plot(steps, returns)
           plt.ylabel('Average Return')
           plt.xlabel('Step')

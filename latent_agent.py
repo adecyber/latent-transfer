@@ -22,7 +22,6 @@ EPS = 1e-20
 SacLossInfo = collections.namedtuple(
     'SacLossInfo', ('critic_loss', 'actor_loss', 'alpha_loss'))
 
-info_buffer = {}
 
 @gin.configurable
 def std_clip_transform(stddevs):
@@ -322,15 +321,7 @@ class SacAgent(tf_agent.TFAgent):
                         actor_loss=actor_loss,
                         alpha_loss=alpha_loss)
 
-    info_buffer["actions"] = actions
-    info_buffer["mean"] = mean
-    info_buffer["std"] = std
-    info_buffer["vae_loss"] = vae_loss
-
     return tf_agent.LossInfo(loss=total_loss, extra=extra)
-
-  def get_info(self):
-  	return info_buffer
 
   def _apply_gradients(self, gradients, variables, optimizer):
     # list(...) is required for Python3.
